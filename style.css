@@ -1,0 +1,15 @@
+#capture-photo, #start-recording, #stop-recording {
+  position: absolute;
+  top: 20px;
+  font-size: 18px;
+  background-color: #4CAF50;
+  color: white;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  z-index: 10;
+}
+
+#capture-photo { left: 20px; }
+#start-recording { left: 160px; } /* Increased left position for more space */
+#stop-recording { left: 300px; display: none; } /* Increased left position for more space */

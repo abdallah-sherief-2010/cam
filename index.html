@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Camera Recorder with High-Quality Mic</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* Basic Styling */
+    body {
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background-color:black;
+      cursor: none; /* Hides default cursor */
+      position: relative;
+      flex-direction: column;
+    }
+
+    /* Video and capture buttons */
+    #camera-feed {
+      border: 5px solid #ccc;
+      border-radius: 8px;
+      display: block;
+      max-width: 80%;
+      max-height: 80%;
+    }
+
+    #capture-photo, #start-recording, #stop-recording {
+      position: absolute;
+      top: 20px;
+      font-size: 18px;
+      background-color: #4CAF50;
+      color: white;
+      padding: 10px 20px;
+      border-radius: 8px;
+      cursor: pointer;
+      z-index: 10;
+    }
+
+    #capture-photo { left: 20px; }
+    #start-recording { left: 120px; }
+    #stop-recording { left: 260px; display: none; }
+
+    /* Display sections */
+    #captured-image, #recorded-video {
+      margin-top: 20px;
+      display: none;
+    }
+
+    /* Bubble cursor effect */
+    .bubble {
+      position: absolute;
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      background-color: rgba(0, 128, 255, 0.5);
+      pointer-events: none;
+      transform: translate(-50%, -50%);
+      animation: bubbleAnimation 1.5s ease-out;
+    }
+
+    /* Bubble animation */
+    @keyframes bubbleAnimation {
+      0% { transform: scale(0.5); opacity: 1; }
+      100% { transform: scale(2.5); opacity: 0; }
+    }
+
+  </style>
+</head>
+<body>
+
+  <video id="camera-feed" autoplay playsinline></video>
+  <button id="capture-photo">Capture Image</button>
+  <button id="start-recording">Start Recording</button>
+  <button id="stop-recording">Stop Recording</button>
+
+  <!-- Display captured image -->
+  <div id="captured-image">
+    <h3>Captured Image:</h3>
+    <img id="captured-img" src="" alt="Captured Image" style="max-width: 100%; border: 2px solid #ccc; margin-top: 20px;">
+  </div>
+
+  <!-- Display recorded video -->
+  <div id="recorded-video">
+    <h3>Recorded Video:</h3>
+    <video id="video-preview" controls style="max-width: 100%; margin-top: 20px;"></video>
+  </div>
+
+  <!-- Script for functionality -->
+  <script>
+    const captureButton = document.getElementById('capture-photo');
+    const startRecordingButton = document.getElementById('start-recording');
+    const stopRecordingButton = document.getElementById('stop-recording');
+    const cameraFeed = document.getElementById('camera-feed');
+    const capturedImageDiv = document.getElementById('captured-image');
+    const capturedImg = document.getElementById('captured-img');
+    const recordedVideoDiv = document.getElementById('recorded-video');
+    const videoPreview = document.getElementById('video-preview');
+    
+    let mediaRecorder;
+    let recordedChunks = [];
+    let stream;
+    let audioContext;
+    let gainNode;
+    
+    // Access camera with higher quality audio and video constraints
+    async function startCamera() {
+      try {
+        // Request higher quality video and audio
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { 
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            frameRate: { ideal: 30 }
+          },
+          audio: {
+            sampleRate: 44100,  // High audio sample rate
+            channelCount: 2,    // Stereo audio
+            echoCancellation: true, // Optional: Removes echo from audio
+            noiseSuppression: true  // Optional: Reduces background noise
+          }
+        });
+
+        // Connect to an AudioContext for gain control
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const audioTrack = stream.getAudioTracks()[0];
+        const mediaStreamSource = audioContext.createMediaStreamSource(new MediaStream([audioTrack]));
+        
+        // Apply gain control to the audio stream (boost volume)
+        gainNode = audioContext.createGain();
+        gainNode.gain.value = 2.0; // Increase volume by 2x (adjust as needed)
+        mediaStreamSource.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+
+        cameraFeed.srcObject = stream;
+      } catch (error) {
+        console.error('Error accessing the camera or microphone:', error);
+      }
+    }
+    
+    // Capture image from video feed
+    captureButton.addEventListener('click', () => {
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      canvas.width = cameraFeed.videoWidth;
+      canvas.height = cameraFeed.videoHeight;
+      context.drawImage(cameraFeed, 0, 0, canvas.width, canvas.height);
+      const imageUrl = canvas.toDataURL('image/png');
+
+      // Display captured image
+      capturedImg.src = imageUrl;
+      capturedImageDiv.style.display = 'block';  // Show the image section
+    });
+
+    // Start recording video
+    startRecordingButton.addEventListener('click', () => {
+      mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+      mediaRecorder.ondataavailable = (event) => recordedChunks.push(event.data);
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(recordedChunks, { type: 'video/webm' });
+        const videoUrl = URL.createObjectURL(blob);
+        // Display the recorded video
+        videoPreview.src = videoUrl;
+        recordedVideoDiv.style.display = 'block';  // Show the video section
+      };
+      mediaRecorder.start();
+      startRecordingButton.style.display = 'none';
+      stopRecordingButton.style.display = 'block';
+    });
+
+    // Stop recording video
+    stopRecordingButton.addEventListener('click', () => {
+      mediaRecorder.stop();
+      startRecordingButton.style.display = 'block';
+      stopRecordingButton.style.display = 'none';
+    });
+
+    // Start the camera feed when the page loads
+    startCamera();
+
+    // Bubble cursor effect
+    document.addEventListener('mousemove', (event) => {
+      const bubble = document.createElement('div');
+      bubble.classList.add('bubble');
+      bubble.style.left = `${event.clientX}px`;
+      bubble.style.top = `${event.clientY}px`;
+      document.body.appendChild(bubble);
+
+      // Remove the bubble after animation ends
+      setTimeout(() => {
+        bubble.remove();
+      }, 1500);
+    });
+  </script>
+
+</body>
+</html>
